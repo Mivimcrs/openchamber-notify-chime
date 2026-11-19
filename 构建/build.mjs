@@ -17,6 +17,12 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PKG = path.resolve(HERE, '..');
 const SRC = path.join(HERE, 'src');
 
+// 产物里的 `// src/panel.js` 这类相对路径取自 esbuild 的 working dir；
+// 固定成 构建/，本地和 CI 在不同目录下跑都能得到同样的字节。
+const absWorkingDir = HERE;
+const extensionVersion = JSON.parse(fs.readFileSync(path.join(PKG, 'package.json'), 'utf8')).version;
+const define = { __EXT_VERSION__: JSON.stringify(extensionVersion) };
+
 const banner = { js: '/* notify-chime — built by 构建/build.mjs, do not edit by hand. */' };
 
 const run = async () => {
@@ -34,6 +40,8 @@ const run = async () => {
       target: ['chrome120'],
       charset: 'utf8',
       legalComments: 'none',
+      absWorkingDir,
+      define,
       banner,
     }),
     build({
@@ -45,6 +53,8 @@ const run = async () => {
       target: ['node20'],
       charset: 'utf8',
       legalComments: 'none',
+      absWorkingDir,
+      define,
       banner,
     }),
   ]);

@@ -274,7 +274,7 @@ var SURFACE_CONTROLLERS = ["none", "agent", "user"];
 var CONTROLLERS = new Set(SURFACE_CONTROLLERS);
 
 // src/service.js
-var VERSION = "0.1.0";
+var VERSION = "1.0.0";
 var PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 var DATA_DIR = process.env.OPENCHAMBER_SERVICE_DATA_DIR || path.join(os.homedir(), ".openchamber-notify-chime");
 var SOUNDS_DIR = path.join(DATA_DIR, "sounds");

@@ -19,7 +19,8 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createServiceHost, readSessionEventRequest } from '@openchamber/sdk';
 
-const VERSION = '0.1.0';
+// 构建时由 build.mjs 从仓库根的 package.json 注入，避免两处版本号漂移。
+const VERSION = __EXT_VERSION__;
 const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DATA_DIR = process.env.OPENCHAMBER_SERVICE_DATA_DIR || path.join(os.homedir(), '.openchamber-notify-chime');
 const SOUNDS_DIR = path.join(DATA_DIR, 'sounds');
