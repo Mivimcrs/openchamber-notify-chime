@@ -1,6 +1,6 @@
 {
   "name": "openchamber-notify-chime",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "description": "提醒音：会话结束、失败、要你回答或授权时出声，窗口开着也响；四类事件各自可选内置音效或本地文件。",

@@ -274,7 +274,7 @@ var SURFACE_CONTROLLERS = ["none", "agent", "user"];
 var CONTROLLERS = new Set(SURFACE_CONTROLLERS);
 
 // src/service.js
-var VERSION = "1.0.0";
+var VERSION = "1.0.1";
 var PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 var DATA_DIR = process.env.OPENCHAMBER_SERVICE_DATA_DIR || path.join(os.homedir(), ".openchamber-notify-chime");
 var SOUNDS_DIR = path.join(DATA_DIR, "sounds");
@@ -443,19 +443,30 @@ var durationMs = (file) => {
 };
 var toEncodedCommand = (script) => Buffer.from(script, "utf16le").toString("base64");
 var psLiteral = (value) => `'${String(value).replace(/'/g, "''")}'`;
-var spawnQuiet = (command, args, label = "play") => {
+var spawnQuiet = (command, args, label = "play", killAfterMs = 3e4) => {
   try {
     const child = spawn(command, args, { stdio: ["ignore", "ignore", "pipe"], windowsHide: true });
     const started = Date.now();
     let stderr = "";
+    let timedOut = false;
     log(`spawn ${label} pid=${child.pid ?? "none"}`);
     child.stderr?.on("data", (chunk) => {
       if (stderr.length < 2e3) stderr += String(chunk);
     });
+    const killer = setTimeout(() => {
+      timedOut = true;
+      log(`spawn timeout ${label} pid=${child.pid ?? "none"} after ${killAfterMs}ms`);
+      try {
+        child.kill();
+      } catch {
+      }
+    }, killAfterMs);
+    killer.unref?.();
     child.on("error", (error) => log(`spawn failed ${label}: ${error.message}`));
     child.on("close", (code, signal) => {
+      clearTimeout(killer);
       const detail = stderr.includes("CLIXML") ? "" : stderr.trim().replace(/\s+/g, " ").slice(0, 300);
-      log(`spawn done ${label} pid=${child.pid ?? "none"} code=${code} signal=${signal ?? "-"} ms=${Date.now() - started}${detail ? ` stderr=${detail}` : ""}`);
+      log(`spawn done ${label} pid=${child.pid ?? "none"} code=${code} signal=${signal ?? "-"} ms=${Date.now() - started}${timedOut ? " timeout=yes" : ""}${detail ? ` stderr=${detail}` : ""}`);
     });
     child.unref();
     return true;
@@ -481,7 +492,7 @@ var playWindows = (file, volume, label = "play") => {
     "  try { (New-Object System.Media.SoundPlayer $file).PlaySync() } catch { }",
     "}"
   ].join("\n");
-  return spawnQuiet(PS, ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", toEncodedCommand(script)], label);
+  return spawnQuiet(PS, ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", toEncodedCommand(script)], label, waitMs + 5e3);
 };
 var playOther = (file, volume, label = "play") => {
   if (process.platform === "darwin") return spawnQuiet("afplay", ["-v", volume.toFixed(2), file], label);

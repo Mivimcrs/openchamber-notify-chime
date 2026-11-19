@@ -221,20 +221,33 @@ const psLiteral = (value) => `'${String(value).replace(/'/g, "''")}'`;
 // NOTE: never pass the detached option here. A detached, console-less PowerShell starts and
 // exits immediately with code 0 without ever running -EncodedCommand, so the sound never
 // plays while spawn() still reports success. Verified on Windows; keep it non-detached.
-const spawnQuiet = (command, args, label = 'play') => {
+const spawnQuiet = (command, args, label = 'play', killAfterMs = 30_000) => {
   try {
     const child = spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true });
     const started = Date.now();
     let stderr = '';
+    let timedOut = false;
     log(`spawn ${label} pid=${child.pid ?? 'none'}`);
     child.stderr?.on('data', (chunk) => {
       if (stderr.length < 2000) stderr += String(chunk);
     });
+    // 兜底：播放器卡住时别留下一个永不退出的 PowerShell。
+    const killer = setTimeout(() => {
+      timedOut = true;
+      log(`spawn timeout ${label} pid=${child.pid ?? 'none'} after ${killAfterMs}ms`);
+      try {
+        child.kill();
+      } catch {
+        // 进程已经不在了，忽略。
+      }
+    }, killAfterMs);
+    killer.unref?.();
     child.on('error', (error) => log(`spawn failed ${label}: ${error.message}`));
     child.on('close', (code, signal) => {
+      clearTimeout(killer);
       // PowerShell writes progress records to stderr as CLIXML; that is not an error.
       const detail = stderr.includes('CLIXML') ? '' : stderr.trim().replace(/\s+/g, ' ').slice(0, 300);
-      log(`spawn done ${label} pid=${child.pid ?? 'none'} code=${code} signal=${signal ?? '-'} ms=${Date.now() - started}${detail ? ` stderr=${detail}` : ''}`);
+      log(`spawn done ${label} pid=${child.pid ?? 'none'} code=${code} signal=${signal ?? '-'} ms=${Date.now() - started}${timedOut ? ' timeout=yes' : ''}${detail ? ` stderr=${detail}` : ''}`);
     });
     child.unref();
     return true;
@@ -261,7 +274,7 @@ const playWindows = (file, volume, label = 'play') => {
     '  try { (New-Object System.Media.SoundPlayer $file).PlaySync() } catch { }',
     '}',
   ].join('\n');
-  return spawnQuiet(PS, ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', toEncodedCommand(script)], label);
+  return spawnQuiet(PS, ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', toEncodedCommand(script)], label, waitMs + 5000);
 };
 
 const playOther = (file, volume, label = 'play') => {
