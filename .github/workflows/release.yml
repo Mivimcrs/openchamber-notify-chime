@@ -1,0 +1,59 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 装构建依赖
+        working-directory: 构建
+        run: npm ci
+
+      - name: 重建产物
+        run: node 构建/build.mjs
+
+      - name: 产物必须与源码一致（忘了提交构建结果就失败）
+        run: git diff --exit-code -- panel/main.js service/main.js
+
+      - name: 自检
+        run: node 工具/check.mjs
+
+      - name: 打包
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          ZIP="openchamber-notify-chime-${VERSION}.zip"
+          zip -r "$ZIP" . \
+            -x '.git/*' '.github/*' '构建/*' '工具/*' 'node_modules/*' \
+               '*.zip' '踩坑日志.md' '.gitignore' '.gitattributes'
+          unzip -l "$ZIP" | head -30
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openchamber-notify-chime-${{ env.VERSION }}
+          path: ${{ env.ZIP }}
+          if-no-files-found: error
+
+      - name: 发布 Release（仅 tag 触发）
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$ZIP" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
